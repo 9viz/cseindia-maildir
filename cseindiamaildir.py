@@ -14,11 +14,12 @@ import json
 from html2text import html2text
 import os
 import re
-import threading
+import multiprocessing as multiproc
 import urllib.request as req
 
 UA = { "User-Agent": "Chrome/96.0.4664.110" }
-THREADS = []
+PROCS = []
+MESSAGES = []
 MAILDIR = mailbox.Maildir(dirname="/home/viz/mail/rss2email/scimag")
 REPORT_PDF_RE = re.compile(".*/downloadreports/.*")
 DB = {}
@@ -68,9 +69,9 @@ def subpage(page, mailbox, article_fun, push_fun):
         tot += 1
         if i["url"] in DB.get(mailbox, []):
             continue
-        t = threading.Thread(target=push_fun, args=(i,), name="article fetch " + i["url"])
-        THREADS.append(t)
-        t.run()
+        p = multiproc.Process(target=push_fun, args=(i,), name="article fetch " + i["url"])
+        PROCS.append(p)
+        p.start()
         n += 1
     return n, tot
 
@@ -97,8 +98,9 @@ def push_press_release(article):
     m.add_header("Date", email.utils.formatdate())
     m.set_content(str(c[1]), subtype="html")
     m.add_alternative(html2text(str(c[1])))
-    print(MAILDIR.add(m), article["url"])
-    DB["press-release"].append(article["url"])
+    MESSAGES.append(("press-release", m))
+    # print(MAILDIR.add(m), article["url"])
+    # DB["press-release"].append(article["url"])
 
 
 
@@ -125,8 +127,9 @@ def push_report(report):
     m.add_header("Subject", c[0])
     m.set_content(str(c[1]) + "\nPDF: " + report["pdf"], subtype="html")
     m.add_alternative(html2text(str(c[1])) + "\nPDF: " + report["pdf"])
-    print(MAILDIR.add(m), report["url"])
-    DB["reports"].append(report["url"])
+    MESSAGES.append(("reports", m))
+    # print(MAILDIR.add(m), report["url"])
+    # DB["reports"].append(report["url"])
 
 
 
@@ -136,17 +139,24 @@ def do(url, cat, article_fun, push_fun):
     n, tot = subpage(main, cat, article_fun, push_fun)
     # If no article fetched or if no. articles fetched is less than
     # the number in page, bail.
-    print("n, tot ", n, tot)
-    if not (n == 0 or n < tot):
+    #if not (n == 0 or n < tot):
+    if True:
         p = pages(main)
         for i in p:
-            t = threading.Thread(target=subpage, args=(i, cat, article_fun, push_fun),
-                                 name=f"subpage {i}")
-            THREADS.append(t)
-            t.run()
+            print("Trying...", i)
+            p = multiproc.Process(target=subpage, args=(i, cat, article_fun, push_fun),
+                                  name=f"subpage {i}")
+            PROCS.append(p)
+            p.start()
 
 if __name__ == "__main__":
-    do("https://www.cseindia.org/press-releases", "press-release", articles_in_press_release, push_press_release)
-    do("https://www.cseindia.org/reports", "reports", articles_in_report, push_report)
-    with open("./DB", "w") as f:
-        f.write(json.dumps(DB, indent=4))
+    with multiproc.Manager() as manager:
+        MESSAGES = manager.list()
+        do("https://www.cseindia.org/press-releases", "press-release", articles_in_press_release, push_press_release)
+        do("https://www.cseindia.org/reports", "reports", articles_in_report, push_report)
+        for p in PROCS: p.join()
+        for m in MESSAGES:
+            print(MAILDIR.add(m[1]), m[1].get("Url"))
+            DB[m[0]].append(m[1].get("Url"))
+        with open("./DB", "w") as f:
+            f.write(json.dumps(DB, indent=4))
