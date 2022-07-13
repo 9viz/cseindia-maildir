@@ -139,8 +139,7 @@ def do(url, cat, article_fun, push_fun):
     n, tot = subpage(main, cat, article_fun, push_fun)
     # If no article fetched or if no. articles fetched is less than
     # the number in page, bail.
-    #if not (n == 0 or n < tot):
-    if True:
+    if not (n == 0 or n < tot):
         p = pages(main)
         for i in p:
             print("Trying...", i)
