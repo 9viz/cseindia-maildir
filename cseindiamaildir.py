@@ -63,7 +63,11 @@ def push_message(article):
 
 
 def subpage(page):
-    """PAGE maybe be a soup object or a string representing a URL."""
+    """PAGE maybe be a soup object or a string representing a URL.
+    Return the number of article fetched.
+
+    """
+    n = 0
     if isinstance(page, str):
         page = bs4.BeautifulSoup(request(page), "html.parser")
     for i in articles_in_soup(page):
@@ -72,16 +76,23 @@ def subpage(page):
         t = threading.Thread(target=push_message, args=(i,), name="article fetch " + i["url"])
         THREADS.append(t)
         t.run()
+        n += 1
+    return n
 
 def do():
     main = bs4.BeautifulSoup(request("https://www.cseindia.org/press-releases"), "html.parser")
-    p = [ main ] + pages(main)
-    for i in p:
-        t = threading.Thread(target=subpage, args=(i,), name=f"subpage {i}")
-        THREADS.append(t)
-        t.run()
+    # Try the mainpage first.
+    n = subpage(main)
+    # If no article fetched or if no. articles fetched is less than
+    # the number in page, bail.
+    if not (n == 0 or n < len(articles_in_soup(main))):
+        p = pages(main)
+        for i in p:
+            t = threading.Thread(target=subpage, args=(i,), name=f"subpage {i}")
+            THREADS.append(t)
+            t.run()
 
 if __name__ == "__main__":
     do()
-    with open("./DB", "w") as DB:
+    with open("./DB", "w") as f:
         f.write(json.dumps(DB, indent=4))
