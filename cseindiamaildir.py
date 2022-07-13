@@ -2,9 +2,13 @@
 # Let's hope CSE does not change their stuff too much.
 #
 # Licensed under the BSD-2 Clause License, written by Visuwesh.
+#
+# Currently this only handles press releases.
 
 import bs4
 import email.message as msg
+import mailbox
+import json
 from html2text import html2text
 import os
 import threading
@@ -12,7 +16,13 @@ import urllib.request as req
 
 UA = { "User-Agent": "Chrome/96.0.4664.110" }
 THREADS = []
-MESSAGES = []
+MAILDIR = mailbox.Maildir(dirname="./test/cse")
+DB = {}
+if os.path.exists("./DB"):
+    with open("./DB") as f:
+        DB = json.loads(f.read())
+if not DB.get("press-release"):
+    DB["press-release"] = []
 
 def request(url):
     """Request URL."""
@@ -44,18 +54,22 @@ def push_message(article):
     m.add_header("Topic", article["topic"])
     m.add_header("Newsgroups", "CSE-Press-Release")
     m.add_header("Url", article["url"])
-    c = content(article)
+    c = content(article["url"])
     m.add_header("Subject", c[0])
     m.set_content(str(c[1]), subtype="html")
     m.add_alternative(html2text(str(c[1])))
-    MESSAGES.append(m)
+    print(MAILDIR.add(m))
+    DB["press-release"].append(article["url"])
+
 
 def subpage(page):
     """PAGE maybe be a soup object or a string representing a URL."""
     if isinstance(page, str):
         page = bs4.BeautifulSoup(request(page), "html.parser")
-    for i in articles_in_soup(soup):
-        t = threading.Thread(target=push_a, args=(i,), name="article fetch " + i["url"])
+    for i in articles_in_soup(page):
+        if i["url"] in DB.get("press-release", []):
+            continue
+        t = threading.Thread(target=push_message, args=(i,), name="article fetch " + i["url"])
         THREADS.append(t)
         t.run()
 
@@ -66,3 +80,8 @@ def do():
         t = threading.Thread(target=subpage, args=(i,), name=f"subpage {i}")
         THREADS.append(t)
         t.run()
+
+if __name__ == "__main__":
+    do()
+    with open("./DB", "w") as DB:
+        f.write(json.dumps(DB, indent=4))
