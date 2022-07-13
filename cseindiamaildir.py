@@ -7,6 +7,7 @@
 
 import bs4
 import email.message as msg
+from email.utils import formatdate as msgdate
 import mailbox
 import json
 from html2text import html2text
@@ -56,6 +57,8 @@ def push_message(article):
     m.add_header("Url", article["url"])
     c = content(article["url"])
     m.add_header("Subject", c[0])
+    # Poor man's date.
+    m.add_header("Date", msgdate())
     m.set_content(str(c[1]), subtype="html")
     m.add_alternative(html2text(str(c[1])))
     print(MAILDIR.add(m))
