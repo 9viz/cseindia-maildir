@@ -1,7 +1,7 @@
 # Due to the very nature of webscraping, this will be highly fragile.
 # Let's hope CSE does not change their stuff too much.
 #
-# Licensed under the BSD-2 Clause License, written by Visuwesh.
+# Licensed under the BSD 2-Clause License.
 #
 # Currently this only handles press releases.
 
